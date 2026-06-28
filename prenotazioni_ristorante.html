@@ -980,7 +980,7 @@ function renderSheet(sheetName) {
       ${p.ora ? `<div class="pren-time">${p.ora}</div>` : ''}
       <div class="pren-persons">👥 ${parseInt(p.persone) || 0}</div>
       <div class="pren-table-badge ${hasTavolo ? '' : 'empty'}" onclick="openTableModal(${idx}, event)">
-        ${p.tavolo || '+ Tavolo'}
+        ${hasTavolo ? extractTableKeys(p.tavolo).join('-') : '+ Tavolo'}
       </div>
     `;
     if (p.note) {
@@ -998,7 +998,10 @@ function isSpecial(val) {
   return /asporto|bar/i.test(String(val));
 }
 
-// extractTableNums definita in buildFloorPlan section
+function extractTableNums(val) {
+  return extractTableKeys(val).map(k => parseInt(k));
+}
+// extractTableNums aggiornata
 
 // ─── MODAL PIANTINA ─────────────────────────────────────────────────────────
 let tableModalContext = null; // 'edit' o 'new'
@@ -1058,19 +1061,34 @@ function extractTableNums(val) {
 
 function extractTableKeys(val) {
   // Restituisce array di chiavi tipo ['34/A', '35', '36/B']
-  if (!val) return [];
-  const s = String(val).trim();
+  if (val === null || val === undefined || val === '') return [];
+  
+  let s = String(val).trim();
   if (isSpecial(s)) return [];
-  // Ignora date o valori non tavolo
-  if (s.includes('T') && s.includes(':') && s.includes('.')) return []; // è una data ISO
-  // Splitta per - o spazio
-  const parts = s.split(/[-\s]+/).map(p => p.trim()).filter(Boolean);
-  return parts.filter(p => {
-    // Accetta solo formato: numero opzionalmente seguito da /A o /B
-    if (!/^\d+(\/[AB])?$/i.test(p)) return false;
+  
+  // Data ISO tipo "2026-12-11T08:00:00.000Z" -> estrai solo i numeri che sono tavoli
+  // es. 2026-12-11 -> parti: 2026, 12, 11 -> solo 11 e 12 sono tavoli validi
+  if (s.includes('T') && s.includes(':')) {
+    // Prendi solo la parte data (prima della T) e splitta per -
+    const datePart = s.split('T')[0]; // "2026-12-11"
+    const nums = datePart.split('-').map(n => parseInt(n)).filter(n => ALL_TAVOLI.includes(n));
+    return nums.map(String);
+  }
+  
+  // Float tipo "11.0" -> converti in "11"
+  s = s.replace(/\.0$/, '');
+  
+  // Normalizza separatori
+  s = s.replace(/[,\s]+/g, '-');
+  
+  const parts = s.split('-').map(p => p.trim()).filter(Boolean);
+  const result = [];
+  for (const p of parts) {
+    if (!/^\d+(\/[AB])?$/i.test(p)) continue;
     const base = parseInt(p);
-    return ALL_TAVOLI.includes(base);
-  });
+    if (ALL_TAVOLI.includes(base)) result.push(p);
+  }
+  return result;
 }
 
 let openAbMenu = null; // riferimento al menu aperto
@@ -1136,9 +1154,13 @@ function buildFloorPlan(skipPrenIdx) {
       const isOccupied = fullOccupied || bothOccupied;
 
       // Selezione corrente su questo tavolo
-      const selFull = selectedTables.has(String(t.n));
-      const selA = selectedTables.has(`${t.n}/A`);
-      const selB = selectedTables.has(`${t.n}/B`);
+      // Considera anche i tavoli che erano già assegnati alla prenotazione in editing
+      const myFull = myKeys.has(String(t.n));
+      const myA = myKeys.has(`${t.n}/A`);
+      const myB = myKeys.has(`${t.n}/B`);
+      const selFull = selectedTables.has(String(t.n)) || myFull;
+      const selA = selectedTables.has(`${t.n}/A`) || myA;
+      const selB = selectedTables.has(`${t.n}/B`) || myB;
       const hasSel = selFull || selA || selB;
 
       // Label stato
