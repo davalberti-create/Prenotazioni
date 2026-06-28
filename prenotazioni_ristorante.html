@@ -606,6 +606,25 @@
   }
   .ab-overlay.open { display: block; }
 
+  /* ELIMINA bottone */
+  .delete-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid var(--red);
+    background: transparent;
+    color: var(--red-light);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    opacity: 0.5;
+    transition: all 0.15s;
+  }
+  .delete-btn:hover, .delete-btn:active { opacity: 1; background: var(--red); color: white; }
+
   /* ARRIVATI bottone */
   .arrive-btn {
     width: 32px;
@@ -754,7 +773,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzfyS3IP2RKPK9livnAX73jDAgKfFUowvr22RTgJrjOmq9h3-6IZdNCG1x0RyXSapRKew/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwKMBwpkIHGUgr_Aio6voihtt8IiwQrOBP1zyLLIGBPnk5lwLImndQm0dmvXCTaAJ8WzQ/exec';
 
 // Struttura tavoli: [numero, colonna_griglia (1-based), riga_griglia (1-based)]
 // Griglia 7 colonne x 6 righe + zone speciali
@@ -966,6 +985,13 @@ function renderSheet(sheetName) {
     return;
   }
 
+  // Ordina per ora arrivo
+  prenotazioni.sort((a, b) => {
+    const ta = String(a.ora || '99:99');
+    const tb = String(b.ora || '99:99');
+    return ta.localeCompare(tb);
+  });
+
   list.innerHTML = '';
   prenotazioni.forEach((p, idx) => {
     const card = document.createElement('div');
@@ -982,6 +1008,7 @@ function renderSheet(sheetName) {
       <div class="pren-table-badge ${hasTavolo ? '' : 'empty'}" onclick="openTableModal(${idx}, event)">
         ${hasTavolo ? extractTableKeys(p.tavolo).join('-') : '+ Tavolo'}
       </div>
+      <button class="delete-btn" onclick="deletePrenotazione(${idx}, event)" title="Elimina prenotazione">🗑</button>
     `;
     if (p.note) {
       const noteEl = document.createElement('div');
@@ -1372,6 +1399,35 @@ function showToast(msg, isError = false) {
   t.textContent = msg;
   t.className = 'toast' + (isError ? ' error' : '') + ' show';
   setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ─── ELIMINA PRENOTAZIONE ───────────────────────────────────────────────────
+async function deletePrenotazione(prenIdx, event) {
+  event && event.stopPropagation();
+  const p = prenotazioni[prenIdx];
+  if (!confirm(`Eliminare la prenotazione di ${p.nome}?`)) return;
+
+  try {
+    const icon = document.getElementById('syncIcon');
+    icon.classList.add('spin');
+
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'delete',
+        sheet: p.sheetName,
+        row: p.rowIdx + 1
+      })
+    });
+
+    showToast(`✓ Prenotazione di ${p.nome} eliminata`);
+    await loadData();
+  } catch(e) {
+    showToast('⚠ Errore: ' + e.message, true);
+    document.getElementById('syncIcon').classList.remove('spin');
+  }
 }
 
 // ─── TOGGLE ARRIVO ──────────────────────────────────────────────────────────
