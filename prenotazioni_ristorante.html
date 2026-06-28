@@ -1372,10 +1372,31 @@ async function saveNewPrenotazione() {
   const note = document.getElementById('newNote').value || '';
 
   try {
+    // Costruisci la riga rispettando l'ordine delle colonne del foglio corrente
+    const rows = allData[currentSheet] || [];
+    let headerRow = [];
+    for (let i = 0; i < Math.min(3, rows.length); i++) {
+      if (rows[i].some(v => String(v).toUpperCase().trim() === 'NOME')) {
+        headerRow = rows[i].map(v => String(v).toUpperCase().trim());
+        break;
+      }
+    }
+    // Costruisci riga vuota della stessa lunghezza dell'header
+    const newRow = new Array(headerRow.length).fill('');
+    const set = (col, val) => { const i = headerRow.indexOf(col); if (i >= 0) newRow[i] = val; };
+    set('NOME', nome);
+    set('PERSONE', parseInt(persone));
+    set('TAVOLO', tavolo);
+    set('ARRIVATI', false);
+    // ORA ARRIVO può variare
+    const oraIdx = headerRow.findIndex(h => h.includes('ORA'));
+    if (oraIdx >= 0) newRow[oraIdx] = ora;
+    set('NOTE', note);
+
     const body = {
       action: 'append',
       sheet: currentSheet,
-      values: [nome, parseInt(persone), tavolo, false, ora, note]
+      values: newRow
     };
 
     await fetch(SCRIPT_URL, {
